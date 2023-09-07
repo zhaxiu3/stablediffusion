@@ -181,6 +181,12 @@ def main():
         default="autocast"
     )
 
+    parser.add_argument(
+        "--request-id",
+        type=str,
+        help="request id"
+    )
+
     opt = parser.parse_args()
     seed_everything(opt.seed)
 
@@ -216,7 +222,6 @@ def main():
     sample_path = os.path.join(outpath, "samples")
     os.makedirs(sample_path, exist_ok=True)
     base_count = len(os.listdir(sample_path))
-    grid_count = len(os.listdir(outpath)) - 1
 
     assert os.path.isfile(opt.init_img)
     init_image = load_img(opt.init_img).to(device)
@@ -233,7 +238,6 @@ def main():
     with torch.no_grad():
         with precision_scope("cuda"):
             with model.ema_scope():
-                all_samples = list()
                 for n in trange(opt.n_iter, desc="Sampling"):
                     for prompts in tqdm(data, desc="data"):
                         uc = None
@@ -258,22 +262,6 @@ def main():
                             img = put_watermark(img, wm_encoder)
                             img.save(os.path.join(sample_path, f"{base_count:05}.png"))
                             base_count += 1
-                        all_samples.append(x_samples)
-
-                # additionally, save as grid
-                grid = torch.stack(all_samples, 0)
-                grid = rearrange(grid, 'n b c h w -> (n b) c h w')
-                grid = make_grid(grid, nrow=n_rows)
-
-                # to image
-                grid = 255. * rearrange(grid, 'c h w -> h w c').cpu().numpy()
-                grid = Image.fromarray(grid.astype(np.uint8))
-                grid = put_watermark(grid, wm_encoder)
-                grid.save(os.path.join(outpath, f'grid-{grid_count:04}.png'))
-                grid_count += 1
-
-    print(f"Your samples are ready and waiting for you here: \n{outpath} \nEnjoy.")
-
 
 if __name__ == "__main__":
     main()
